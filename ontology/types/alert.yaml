@@ -1,0 +1,45 @@
+# Object Type: Alert
+# 代表一条告警事件
+type: alert
+description: "告警事件，来源于飞书告警群的消息卡片"
+primary_key: message_id
+properties:
+  message_id:
+    type: string
+    required: true
+    description: "飞书消息 ID"
+  title:
+    type: string
+    description: "告警标题"
+  content:
+    type: string
+    description: "告警正文"
+  severity:
+    type: string
+    enum: [P0, P1, P2, P3, unknown]
+  psm:
+    type: json
+    description: "关联的 PSM 列表 (array of strings)"
+  region:
+    type: string
+  timestamp:
+    type: datetime
+  category:
+    type: string
+    enum:
+      [
+        自身代码,
+        自身Mesh,
+        资源瓶颈,
+        SLA下降,
+        下游依赖,
+        基建-TLB,
+        基建-网络,
+        基建-AGW,
+        DFlow同步,
+        其他,
+      ]
+    description: "归因分类 (规则引擎产出)"
+  resolved:
+    type: boolean
+    default: false

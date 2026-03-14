@@ -1,0 +1,26 @@
+# Object Type: Host
+# 代表物理机或虚拟机
+type: host
+description: "主机实体 (物理机/虚拟机/容器宿主)"
+primary_key: hostname
+properties:
+  hostname:
+    type: string
+    required: true
+  ip:
+    type: string
+  region:
+    type: string
+  az:
+    type: string
+    description: "可用区"
+  vdc:
+    type: string
+    description: "虚拟数据中心"
+  cpu_cores:
+    type: integer
+  memory_gb:
+    type: float
+  status:
+    type: string
+    enum: [running, stopped, maintenance]

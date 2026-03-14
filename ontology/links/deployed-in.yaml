@@ -1,0 +1,16 @@
+# Link: deployed-in
+# 服务部署在某个 VDC/主机
+# 实时部署信息通过 query-cmdb.sh gremlin 查询 ByteGraph
+link: deployed-in
+description: "服务部署在某个 VDC 或主机上"
+source_type: service
+target_type: host
+properties:
+  instance_count:
+    type: integer
+  weight:
+    type: float
+    description: "该部署点的流量权重"
+query_source:
+  tool: "query-cmdb.sh gremlin"
+  description: "实时部署信息从 ByteGraph 查询，不存 OFS"

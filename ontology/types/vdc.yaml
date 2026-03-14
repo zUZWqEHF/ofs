@@ -1,0 +1,30 @@
+# Object Type: VDC (图模型参考 + OFS 存储)
+# ByteGraph Vertex: Cluster
+# 对应 ByteGraph 图中的 Cluster 节点，是服务实例的部署单元
+# 静态元数据存 OFS，实时拓扑通过 query-cmdb.sh 查询
+type: vdc
+description: "虚拟数据中心，服务实例部署的最小机房单元"
+primary_key: vdc_id
+graph_vertex: Cluster
+properties:
+  vdc_id:
+    type: string
+    required: true
+    description: "VDC 标识"
+    examples: ["mycisb", "sgcisa", "lf", "hl", "lq", "yg"]
+  region:
+    type: string
+    description: "所属区域"
+    examples: ["Asia-CIS", "CN-North"]
+  ha_pair:
+    type: string
+    description: "容灾对端 VDC"
+    known_pairs:
+      - ["mycisb", "sgcisa"]
+      - ["lf", "hl"]
+  location:
+    type: string
+    description: "地理位置"
+  standard:
+    type: boolean
+    description: "是否为标准 VDC (mycisb/sgcisa/lf/hl/lq/yg)"

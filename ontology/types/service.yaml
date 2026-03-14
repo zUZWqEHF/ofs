@@ -1,0 +1,81 @@
+# Object Type: Service (PSM)
+# ByteGraph Vertex: Service
+# 微服务实体，CMDB 图的顶层节点
+type: service
+description: "微服务实体，对应 ByteGraph 中的 Service 节点"
+primary_key: psm
+graph_vertex: Service
+
+properties:
+  psm:
+    type: string
+    required: true
+    description: "PSM 标识"
+    format: "{product}.{module}.{name}:{suffix}"
+    examples:
+      - "people.data.etl:tce"
+      - "cis.infra.cmdb:tce"
+      - "toutiao.mysql.people_core:other"
+    notes:
+      - "标准后缀: :tce (容器服务), :other (基础设施)"
+      - "如果 :tce 查不到，尝试 :other"
+  region:
+    type: string
+    description: "部署地域"
+  owner:
+    type: string
+    description: "负责人 / 团队 (即 BusinessLine)"
+  ha_coverage:
+    type: float
+    description: "HA 覆盖率 (0-1)"
+  instance_count:
+    type: integer
+    description: "实例数"
+  is_super_node:
+    type: boolean
+    description: "是否为超级节点 (依赖/被依赖 > 100)"
+  single_side:
+    type: boolean
+    description: "是否单侧部署 (lonely service)"
+  cross_vdc:
+    type: boolean
+    description: "是否有跨 VDC 依赖"
+
+# ── 图遍历模式 ──
+# AI 可直接用这些 Gremlin 模式查询 ByteGraph
+graph_queries:
+  downstream_deps:
+    description: "查询 PSM 的下游依赖 (我调谁)"
+    gremlin: |
+      g.V().has("type","Service").has("id","{psm}:tce")
+        .in("INSTANCE_OWNED_BY")
+        .out("DEPENDS_ON")
+        .out("INSTANCE_OWNED_BY")
+        .dedup().properties("id").value()
+  upstream_callers:
+    description: "查询 PSM 的上游调用方 (谁调我)"
+    gremlin: |
+      g.V().has("type","Service").has("id","{psm}:tce")
+        .in("INSTANCE_OWNED_BY")
+        .in("DEPENDS_ON")
+        .out("INSTANCE_OWNED_BY")
+        .dedup().properties("id").value()
+  business_line:
+    description: "查询 PSM 所属业务线"
+    gremlin: |
+      g.V().has("type","Service").has("id","{psm}:tce")
+        .out("OWNED_BY").properties("id").value()
+  deployed_vdcs:
+    description: "查询 PSM 部署在哪些 VDC"
+    gremlin: |
+      g.V().has("type","Service").has("id","{psm}:tce")
+        .in("INSTANCE_OWNED_BY")
+        .out("DEPLOYED_IN").dedup().properties("id").value()
+  infra_callers:
+    description: "查询基础设施 PSM 的调用方 (mysql/redis/kafka 等无 INSTANCE_OWNED_BY 边)"
+    gremlin: |
+      g.V().has("type","Instance").has("id","{vdc}:{psm}:{suffix}")
+        .in("DEPENDS_ON")
+        .out("INSTANCE_OWNED_BY")
+        .dedup().properties("id").value()
+    notes: "基础设施 PSM 需要用 instance_id 查，不能走 Service 节点"

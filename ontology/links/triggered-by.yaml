@@ -1,0 +1,13 @@
+# Link: triggered-by
+# 告警由服务触发
+link: triggered-by
+description: "告警由某个服务的异常触发"
+source_type: alert
+target_type: service
+properties:
+  metric:
+    type: string
+    description: "触发指标 (e.g., success_rate, latency_p99)"
+  threshold:
+    type: string
+    description: "触发阈值"

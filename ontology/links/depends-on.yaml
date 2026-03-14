@@ -1,0 +1,17 @@
+# Link: depends-on
+# 服务间依赖关系（OFS 存储的静态知识）
+# 实时依赖拓扑通过 query-cmdb.sh gremlin 查询 ByteGraph
+link: depends-on
+description: "服务 A 依赖服务 B"
+source_type: service
+target_type: service
+properties:
+  call_type:
+    type: string
+    enum: [rpc, http, mq, redis, mysql]
+  is_critical:
+    type: boolean
+    description: "是否核心依赖"
+query_source:
+  tool: "query-cmdb.sh gremlin"
+  description: "实时依赖关系从 ByteGraph 查询，不存 OFS"

@@ -1,0 +1,41 @@
+# Object Type: PersonProfile
+# 群聊成员画像，由 Agent 自主沉淀
+type: person-profile
+description: "群聊成员的画像分析，包含性格特点、关注领域、发言风格"
+primary_key: person_id
+properties:
+  person_id:
+    type: string
+    required: true
+    description: "Feishu open_id"
+  name:
+    type: string
+    required: true
+    description: "姓名"
+  en_name:
+    type: string
+    description: "英文名"
+  msg_count:
+    type: integer
+    description: "群聊消息总数"
+  topics:
+    type: json
+    description: "关注的技术方向列表"
+  style:
+    type: string
+    description: "发言风格描述"
+  personality_tags:
+    type: json
+    description: "性格标签列表 (e.g., [严谨, 直球, 追问型])"
+  sample_quotes:
+    type: json
+    description: "代表性发言摘录"
+  avatar_url:
+    type: string
+    description: "头像 URL"
+  agent_notes:
+    type: json
+    description: "各 Agent 对此人的主观评价 {agentName: note}"
+  last_updated:
+    type: datetime
+    description: "最近更新时间"

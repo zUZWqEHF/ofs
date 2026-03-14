@@ -1,0 +1,20 @@
+type: workspace-file
+description: "Agent workspace file (identity, context, memory) — persisted through OFS HybridStorage"
+primary_key: file_id
+properties:
+  file_id:
+    type: string
+    required: true
+    description: "Filename as ID (e.g. IDENTITY.md)"
+  file_path:
+    type: string
+    required: true
+    description: "Relative path in workspace"
+  content:
+    type: string
+    description: "File content (markdown or text)"
+  last_modified:
+    type: datetime
+  hash:
+    type: string
+    description: "Content hash for change detection"

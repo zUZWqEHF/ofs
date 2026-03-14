@@ -1,0 +1,14 @@
+# Link: knows-about
+# Agent 了解某个人的画像
+link: knows-about
+description: "Agent 拥有某个人的画像分析"
+source_type: agent
+target_type: person-profile
+properties:
+  familiarity:
+    type: string
+    enum: [casual, well-known, expert]
+    description: "了解程度"
+  last_interaction:
+    type: datetime
+    description: "最近一次基于此画像的互动"

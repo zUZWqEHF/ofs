@@ -1,0 +1,33 @@
+# Object Type: Agent
+# Agent 身份实体，用于 10000 个 Agent 的分布式协作
+type: agent
+description: "Agent 身份，每个 Agent 拥有独立的上下文空间"
+primary_key: agent_id
+properties:
+  agent_id:
+    type: string
+    required: true
+    description: "Agent 唯一标识"
+  agent_type:
+    type: string
+    required: true
+    description: "Agent 类型 (inspection/diagnosis/bot/...)"
+  host:
+    type: string
+    description: "运行的宿主机 IP 或主机名"
+  capabilities:
+    type: json
+    description: "能力列表 (e.g., [chrome, ssh, metrics])"
+  sandbox_vm_ip:
+    type: string
+    description: "沙箱 VM IP 地址"
+  context_version:
+    type: integer
+    description: "当前上下文版本号"
+  last_heartbeat:
+    type: datetime
+    description: "最近一次心跳时间"
+  status:
+    type: string
+    description: "Agent 状态"
+    enum: [active, idle, error, stopped]

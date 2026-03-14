@@ -1,0 +1,25 @@
+# Object Type: TCE Query
+# TCE MCP tool container query record with results
+type: tce-query
+description: "TCE container engine query and results for L2 context"
+primary_key: query_id
+properties:
+  query_id:
+    type: string
+    required: true
+    description: "Unique query identifier"
+  queryType:
+    type: string
+    required: true
+    description: "Query type (list_pods, get_pod, list_deployments, etc.)"
+  args:
+    type: json
+    required: true
+    description: "Query arguments (cluster, namespace, etc.)"
+  result:
+    type: json
+    description: "Container query result data"
+  timestamp:
+    type: datetime
+    required: true
+    description: "Query execution timestamp"

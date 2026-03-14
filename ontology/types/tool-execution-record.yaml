@@ -1,0 +1,38 @@
+# Object Type: Tool Execution Record
+# Records tool execution events with timing and results for observability
+type: tool-execution-record
+description: "Tool execution event record with timing, results, and observability data"
+primary_key: execution_id
+properties:
+  execution_id:
+    type: string
+    required: true
+    description: "Unique execution identifier"
+  tool:
+    type: string
+    required: true
+    description: "Tool name (bytegraph, argos, tce)"
+  method:
+    type: string
+    required: true
+    description: "Tool method name"
+  args:
+    type: json
+    description: "Method arguments"
+  success:
+    type: boolean
+    required: true
+    description: "Whether execution succeeded"
+  result:
+    type: json
+    description: "Execution result"
+  error:
+    type: string
+    description: "Error message if failed"
+  duration:
+    type: integer
+    description: "Execution duration in milliseconds"
+  timestamp:
+    type: datetime
+    required: true
+    description: "Execution timestamp"

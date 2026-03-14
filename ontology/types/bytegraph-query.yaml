@@ -1,0 +1,25 @@
+# Object Type: ByteGraph Query
+# ByteGraph MCP tool query record with results
+type: bytegraph-query
+description: "ByteGraph topology query and results for L2 context"
+primary_key: query_id
+properties:
+  query_id:
+    type: string
+    required: true
+    description: "Unique query identifier"
+  queryType:
+    type: string
+    required: true
+    description: "Query type (gremlin, lonely_service, ha_coverage, etc.)"
+  query:
+    type: string
+    required: true
+    description: "Query string or arguments"
+  result:
+    type: json
+    description: "Query result data"
+  timestamp:
+    type: datetime
+    required: true
+    description: "Query execution timestamp"

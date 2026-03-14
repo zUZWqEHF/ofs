@@ -1,0 +1,35 @@
+# Object Type: SOP
+# 标准操作流程，可用于切流、变更、止损等场景
+type: sop
+description: "Standard Operating Procedure — 标准操作流程文档"
+primary_key: sop_id
+properties:
+  sop_id:
+    type: string
+    required: true
+    description: "SOP 唯一标识"
+  title:
+    type: string
+    required: true
+  category:
+    type: string
+    enum: [cutover, change, emergency, deployment, maintenance, monitoring]
+    description: "SOP 类别"
+  scope:
+    type: string
+    description: "适用范围 (e.g., CIS全局, SGCISA机房)"
+  steps:
+    type: json
+    description: "操作步骤 (array of step objects)"
+  prerequisites:
+    type: json
+    description: "前置条件 (array of strings)"
+  rollback:
+    type: string
+    description: "回滚方案"
+  source_url:
+    type: string
+    description: "来源 Lark 文档 URL"
+  last_updated:
+    type: datetime
+    description: "最后更新时间"

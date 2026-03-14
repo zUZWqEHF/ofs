@@ -1,0 +1,25 @@
+# Object Type: Argos Query
+# Argos MCP tool metric query record with results
+type: argos-query
+description: "Argos monitoring metric query and results for L2 context"
+primary_key: query_id
+properties:
+  query_id:
+    type: string
+    required: true
+    description: "Unique query identifier"
+  metric:
+    type: string
+    required: true
+    description: "Metric name being queried"
+  args:
+    type: json
+    required: true
+    description: "Query arguments (tags, time range, etc.)"
+  result:
+    type: json
+    description: "Metric query result data"
+  timestamp:
+    type: datetime
+    required: true
+    description: "Query execution timestamp"

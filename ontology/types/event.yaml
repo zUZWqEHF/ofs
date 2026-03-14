@@ -1,0 +1,50 @@
+# Object Type: Event
+# OFS 第五原语 — 所有变更都记录为 Event
+#
+# v3 temporal: 每个事件携带 before/after 完整快照 + reason 决策痕迹
+# 参考 HydraDB git-style versioned graph 设计
+type: event
+description: "系统事件，所有写操作产生的不可变记录 (含完整 diff 和决策痕迹)"
+primary_key: event_id
+properties:
+  event_id:
+    type: string
+    required: true
+    description: "事件唯一 ID (UUID)"
+  event_type:
+    type: string
+    required: true
+    description: "事件类型"
+    enum: [create, update, delete, link, unlink, action]
+  object_type:
+    type: string
+    required: true
+    description: "关联的对象类型"
+  object_id:
+    type: string
+    required: true
+    description: "关联的对象 ID"
+  agent_id:
+    type: string
+    required: true
+    description: "产生该事件的 Agent ID"
+  timestamp:
+    type: datetime
+    required: true
+    description: "事件时间戳 — t_commit (ISO 8601)"
+  data:
+    type: json
+    description: "事件载荷 (变更内容)"
+  # --- v3 temporal fields ---
+  before:
+    type: json
+    description: "变更前的完整对象快照 (update/delete 时填充)"
+  after:
+    type: json
+    description: "变更后的完整对象快照 (create/update 时填充)"
+  reason:
+    type: string
+    description: "变更原因 — 决策痕迹 (为什么做这个变更)"
+  object_version:
+    type: integer
+    description: "变更后的对象版本号"

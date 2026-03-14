@@ -1,0 +1,39 @@
+# Object Type: Instance (图模型参考，不直接存 OFS)
+# ByteGraph Vertex: Instance
+# 服务在某个 VDC 中的部署实例，是 CMDB 图的核心遍历节点
+# 查询用 action: query-cmdb.sh gremlin
+type: instance
+storage: graph-only
+description: "服务实例 — CMDB 图的中间层节点，连接 Service 和 Cluster (不存 OFS，通过 query-cmdb.sh 查询)"
+primary_key: instance_id
+graph_vertex: Instance
+properties:
+  instance_id:
+    type: string
+    required: true
+    description: "实例 ID，格式: {vdc}:{psm}:{suffix}"
+    format: "{vdc}:{psm}:{suffix}"
+    examples:
+      - "mycisb:people.data.etl:tce"
+      - "hl:cis.infra.cmdb:tce"
+      - "mycisb:toutiao.mysql.people_core:other"
+  vdc:
+    type: string
+    description: "部署的 VDC (从 instance_id 解析)"
+  psm:
+    type: string
+    description: "所属 PSM (从 instance_id 解析)"
+  suffix:
+    type: string
+    description: "后缀类型"
+    enum: [tce, other, redis, rds, kafka, bytees]
+    notes:
+      - "tce: TCE 容器部署的标准服务"
+      - "other: 基础设施 PSM (mysql/redis/kafka 等)"
+      - "基础设施 PSM 无 INSTANCE_OWNED_BY 边，需用 instance_id 直接查"
+  fan_in:
+    type: integer
+    description: "入度 (被多少实例依赖)"
+  fan_out:
+    type: integer
+    description: "出度 (依赖多少实例)"

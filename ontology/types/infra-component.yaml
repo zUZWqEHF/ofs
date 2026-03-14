@@ -1,0 +1,34 @@
+# Object Type: Infra Component
+# 基础设施组件（RDS, Redis, TCE, TLB, TOS, ES 等）
+type: infra-component
+description: "基础设施组件，包含容灾能力、监控指标、止损预案"
+primary_key: component_id
+properties:
+  component_id:
+    type: string
+    required: true
+    description: "组件标识 (e.g., rds, redis, tce, tlb)"
+  name:
+    type: string
+    required: true
+    description: "组件名称"
+  category:
+    type: string
+    enum: [storage, compute, network, access, messaging, observability, basic]
+    description: "组件分类"
+  dr_status:
+    type: string
+    enum: [completed, in-progress, not-started]
+    description: "容灾能力建设状态"
+  dr_capability:
+    type: string
+    description: "容灾能力描述"
+  monitoring_metrics:
+    type: json
+    description: "关键监控指标列表"
+  poc:
+    type: string
+    description: "负责人"
+  emergency_sop_id:
+    type: string
+    description: "关联的止损 SOP ID"

@@ -1,0 +1,13 @@
+# Link: reviews
+# 诊断报告 review 巡检报告
+link: reviews
+description: "诊断报告/self-drive review 巡检报告"
+source_type: diagnosis-report
+target_type: inspection-report
+properties:
+  verdict:
+    type: string
+    enum: [approve, reject]
+  findings:
+    type: json
+    description: "补充发现 (array of strings)"

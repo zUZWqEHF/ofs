@@ -1,0 +1,25 @@
+# Object Type: Runbook
+# 运维手册/操作指南，包含值班操作、巡检手册、交接文档等
+type: runbook
+description: "运维手册 — 日常操作、值班、交接、onboarding 等知识文档"
+primary_key: runbook_id
+properties:
+  runbook_id:
+    type: string
+    required: true
+  title:
+    type: string
+    required: true
+  category:
+    type: string
+    enum: [oncall, onboarding, handover, operations, monitoring, compliance]
+  content:
+    type: string
+    description: "手册正文"
+  audience:
+    type: string
+    description: "目标读者 (e.g., SRE值班, 新人)"
+  source_url:
+    type: string
+  last_updated:
+    type: datetime

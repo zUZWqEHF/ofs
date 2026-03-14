@@ -1,0 +1,17 @@
+# Link: shares-context
+# Agent 间的上下文共享关系
+# Share agent = share context link, always points to latest version
+link: shares-context
+description: "Agent A 将上下文分享给 Agent B (read-only snapshot)"
+source_type: agent
+target_type: agent
+properties:
+  share_link_id:
+    type: string
+    description: "OFS ShareLink UUID"
+  path_prefix:
+    type: string
+    description: "共享的路径前缀 (空=全部)"
+  permissions:
+    type: string
+    enum: [read, read-write]

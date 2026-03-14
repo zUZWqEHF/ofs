@@ -1,0 +1,790 @@
+#!/usr/bin/env bash
+# OFS — Ontology File System CLI
+# Decentralized agent context. Each agent owns ~/.ofs/agents/<id>/
+# Shared ontology at ~/.ofs/ontology/
+# Peer data exchange via TOS (no central server, no SSH)
+set -euo pipefail
+
+OFS_ROOT="${OFS_ROOT:-$HOME/.ofs}"
+ONTOLOGY="$OFS_ROOT/ontology"
+AGENTS_DIR="$OFS_ROOT/agents"
+EVENTS_LOG="$OFS_ROOT/events/events.jsonl"
+
+# Auto-load TOS credentials from ~/.ofs/tos.env
+[[ -f "$OFS_ROOT/tos.env" ]] && set -a && source "$OFS_ROOT/tos.env" && set +a
+
+# TOS config — native ByteDance internal protocol
+TOS_ACCESS_KEY="${TOS_ACCESS_KEY:-}"
+TOS_BUCKET="${TOS_BUCKET:-}"
+TOS_PREFIX="${TOS_PREFIX:-ofs/}"
+# Round-robin endpoints (SD-resolved toutiao.tos.tosapi)
+TOS_ENDPOINTS=(
+  10.122.102.180 10.122.102.182 10.122.102.183 10.122.102.184
+  10.122.102.185 10.122.102.186 10.122.102.187 10.122.102.188
+  10.122.102.209 10.122.102.210 10.122.102.211 10.122.102.212
+  10.122.102.213 10.122.102.214 10.122.102.216 10.122.102.217
+  10.122.102.218 10.122.102.219 10.122.102.220
+)
+TOS_PORT=8789
+_tos_idx=0
+
+usage() {
+  cat <<'EOF'
+Usage: ofs <command> [args]
+
+Schema (shared ontology):
+  schema types              List all entity types
+  schema links              List all link types
+  schema actions            List all actions
+  schema show <name>        Show a type/link/action definition
+
+Local OFS (own context):
+  init <agent_id>                      Initialize local OFS for agent
+  ls <agent_id>                        List local objects
+  read <agent_id> <type> <id>          Read local object
+  write <agent_id> <type> <id> [file]  Write local object (stdin or file)
+  rm <agent_id> <type> <id>            Delete local object
+  link <from> <to> <link_type> [props] Create link
+  unlink <from> <to> <link_type>       Remove link
+  links <agent_id>                     List links
+  history <type> <id>                  Show version history of an object
+  event <agent_id> <type> <obj_type> <obj_id> [data]
+                                       Append event
+  events [agent_id] [--tail N]         Read event log
+
+TOS (shared context — all agents read/write here):
+  push <agent_id> [type] [id]          Push local object(s) to TOS
+  pull <agent_id> [type] [id]          Pull object(s) from TOS to local
+  tos-ls [agent_id]                    List objects in TOS
+  tos-read <agent_id> <type> <id>      Read object directly from TOS
+  tos-write <agent_id> <type> <id> [file]  Write object directly to TOS
+  sync <agent_id>                      Bidirectional sync (local ↔ TOS)
+
+Discovery:
+  discover                             Pull all manifests from TOS — see who has what
+
+Agent registry:
+  register <agent_id> <type> <host> [caps]  Register agent
+  agents                                     List agents
+  whoami                                     Show OFS info
+
+Helpers:
+  tree [agent_id]                      Show directory tree
+EOF
+}
+
+# --- helpers ---
+_agent_dir() { echo "$AGENTS_DIR/$1"; }
+
+_ensure_agent() {
+  local d; d=$(_agent_dir "$1")
+  [[ -d "$d" ]] || { echo "error: agent '$1' not initialized. Run: ofs init $1" >&2; exit 1; }
+}
+
+_ts() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
+_uuid() { cat /proc/sys/kernel/random/uuid 2>/dev/null || python3 -c "import uuid; print(uuid.uuid4())"; }
+
+_ensure_tos() {
+  [[ -n "$TOS_ACCESS_KEY" && -n "$TOS_BUCKET" ]] || {
+    echo "error: TOS_ACCESS_KEY and TOS_BUCKET must be set" >&2
+    echo "  export TOS_ACCESS_KEY=your_key TOS_BUCKET=your_bucket" >&2
+    exit 1
+  }
+}
+
+# Round-robin TOS endpoint
+_tos_host() {
+  local h="${TOS_ENDPOINTS[$_tos_idx]}"
+  _tos_idx=$(( (_tos_idx + 1) % ${#TOS_ENDPOINTS[@]} ))
+  echo "$h"
+}
+
+# TOS key for an agent's object: ofs/<agent_id>/<type>/<id>.json
+_tos_key() {
+  local agent="$1" type="$2" id="$3"
+  echo "${TOS_PREFIX}${agent}/${type}/${id}.json"
+}
+
+# Raw TOS HTTP request
+_tos_request() {
+  local method="$1" key="$2" data="${3:-}"
+  local host; host=$(_tos_host)
+  local url="http://${host}:${TOS_PORT}/${TOS_BUCKET}/${key}"
+
+  if [[ "$method" == "GET" || "$method" == "HEAD" ]]; then
+    curl -s -X "$method" -H "x-tos-access: $TOS_ACCESS_KEY" --fail "$url" 2>/dev/null || true
+  elif [[ "$method" == "PUT" ]]; then
+    if [[ -n "$data" && -f "$data" ]]; then
+      curl -sf -X PUT -H "x-tos-access: $TOS_ACCESS_KEY" -H "Content-Type: application/json" --data-binary "@$data" "$url" 2>/dev/null
+    else
+      echo "$data" | curl -sf -X PUT -H "x-tos-access: $TOS_ACCESS_KEY" -H "Content-Type: application/json" --data-binary @- "$url" 2>/dev/null
+    fi
+  elif [[ "$method" == "DELETE" ]]; then
+    curl -sf -X DELETE -H "x-tos-access: $TOS_ACCESS_KEY" "$url" 2>/dev/null
+  elif [[ "$method" == "LIST" ]]; then
+    # List all objects recursively under prefix (TOS groups by '/' delimiter)
+    local prefix="${key}"
+    python3 -c "
+import urllib.request, json, sys
+
+base = 'http://${host}:${TOS_PORT}/${TOS_BUCKET}'
+headers = {'x-tos-access': '${TOS_ACCESS_KEY}'}
+all_objects = []
+
+def list_prefix(pfx):
+    url = f'{base}?prefix={pfx}&max-keys=1000'
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        resp = json.loads(urllib.request.urlopen(req, timeout=10).read())
+    except:
+        return
+    payload = resp.get('payload', resp)
+    for obj in payload.get('objects', []) or []:
+        if obj.get('key'): all_objects.append(obj)
+    for sub in payload.get('commonPrefix', []) or []:
+        list_prefix(sub)
+
+list_prefix('$prefix')
+json.dump({'payload': {'objects': all_objects}}, sys.stdout)
+" 2>/dev/null
+  fi
+}
+
+# Generate and push manifest for an agent to TOS
+_update_manifest() {
+  local id="$1"
+  local d; d=$(_agent_dir "$id")
+  local ts; ts=$(_ts)
+  # Count objects per type
+  local manifest_tmp; manifest_tmp=$(mktemp)
+  python3 -c "
+import json, os, glob
+
+agent_dir = '$d'
+objects_dir = os.path.join(agent_dir, 'objects')
+links_dir = os.path.join(agent_dir, 'links')
+
+# Count objects per type
+obj_counts = {}
+if os.path.isdir(objects_dir):
+    for t in os.listdir(objects_dir):
+        tp = os.path.join(objects_dir, t)
+        if os.path.isdir(tp):
+            obj_counts[t] = len([f for f in os.listdir(tp) if f.endswith('.json')])
+
+# Collect links
+shares = []
+if os.path.isdir(links_dir):
+    for f in os.listdir(links_dir):
+        if f.startswith('shares-context--'):
+            shares.append(f.replace('shares-context--','').replace('.json',''))
+
+# Read agent.json for capabilities
+caps = []
+agent_file = os.path.join(agent_dir, 'agent.json')
+agent_type = 'unknown'
+host = 'unknown'
+if os.path.isfile(agent_file):
+    a = json.load(open(agent_file))
+    caps = a.get('capabilities', [])
+    agent_type = a.get('agent_type', 'unknown')
+    host = a.get('host', 'unknown')
+
+manifest = {
+    'agent_id': '$id',
+    'agent_type': agent_type,
+    'host': host,
+    'updated': '$ts',
+    'objects': obj_counts,
+    'total_objects': sum(obj_counts.values()),
+    'shares': shares,
+    'capabilities': caps,
+}
+print(json.dumps(manifest, indent=2))
+" > "$manifest_tmp"
+  # Push manifest to TOS
+  local mkey="${TOS_PREFIX}${id}/manifest.json"
+  _tos_request PUT "$mkey" "$manifest_tmp" 2>/dev/null || true
+  # Also save locally
+  cp "$manifest_tmp" "$d/manifest.json" 2>/dev/null || true
+  rm -f "$manifest_tmp"
+}
+
+# --- schema ---
+cmd_schema() {
+  local sub="${1:-}"; shift || true
+  case "$sub" in
+    types)   ls "$ONTOLOGY/types/" | sed 's/\.yaml$//' ;;
+    links)   ls "$ONTOLOGY/links/" | sed 's/\.yaml$//' ;;
+    actions) ls "$ONTOLOGY/actions/" | sed 's/\.sh$//' ;;
+    show)
+      local name="${1:-}"
+      [[ -z "$name" ]] && { echo "usage: ofs schema show <name>" >&2; exit 1; }
+      for dir in types links; do
+        [[ -f "$ONTOLOGY/$dir/$name.yaml" ]] && { cat "$ONTOLOGY/$dir/$name.yaml"; return; }
+      done
+      [[ -f "$ONTOLOGY/actions/$name.sh" ]] && { cat "$ONTOLOGY/actions/$name.sh"; return; }
+      echo "not found: $name" >&2; exit 1
+      ;;
+    *) echo "usage: ofs schema {types|links|actions|show <name>}" >&2; exit 1 ;;
+  esac
+}
+
+# --- init ---
+cmd_init() {
+  local id="${1:?usage: ofs init <agent_id>}"
+  local d; d=$(_agent_dir "$id")
+  mkdir -p "$d/objects" "$d/links"
+  echo "initialized: $d"
+}
+
+# --- ls ---
+cmd_ls() {
+  local id="${1:?usage: ofs ls <agent_id>}"
+  _ensure_agent "$id"
+  local d; d=$(_agent_dir "$id")
+  find "$d/objects" -name "*.json" 2>/dev/null | while read -r f; do
+    local rel="${f#$d/objects/}"
+    echo "${rel%.json}"
+  done | sort
+}
+
+# --- read ---
+cmd_read() {
+  local id="${1:?}" type="${2:?}" oid="${3:?}"
+  _ensure_agent "$id"
+  local f; f="$(_agent_dir "$id")/objects/$type/$oid.json"
+  [[ -f "$f" ]] || { echo "not found: $type/$oid" >&2; exit 1; }
+  cat "$f"
+}
+
+# --- write (write-through: local + TOS, v3 temporal versioning) ---
+cmd_write() {
+  local id="${1:?}" type="${2:?}" oid="${3:?}" file="${4:-}"
+  _ensure_agent "$id"
+  local dir; dir="$(_agent_dir "$id")/objects/$type"
+  mkdir -p "$dir"
+  local target="$dir/$oid.json"
+
+  # v3 temporal: capture before-snapshot if object exists
+  local before="" event_type="create" old_version=0 new_version=1
+  if [[ -f "$target" ]]; then
+    before=$(cat "$target")
+    old_version=$(echo "$before" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('_version',0))" 2>/dev/null || echo 0)
+    new_version=$((old_version + 1))
+    event_type="update"
+  fi
+
+  # Read new content into a temp file
+  local tmpnew; tmpnew=$(mktemp)
+  if [[ -n "$file" ]]; then
+    cp "$file" "$tmpnew"
+  else
+    cat > "$tmpnew"
+  fi
+
+  # v3 temporal: inject _version, _valid_from, _updated_at, _supersedes into the object
+  local ts; ts=$(_ts)
+  python3 -c "
+import json, sys
+obj = json.load(open('$tmpnew'))
+obj['_version'] = $new_version
+obj['_valid_from'] = '$ts'
+obj['_updated_at'] = '$ts'
+if $new_version == 1:
+    obj['_created_at'] = '$ts'
+elif '_created_at' not in obj:
+    # preserve original created_at from before
+    try:
+        old = json.loads('''$(echo "$before" | sed "s/'/\\\\'/g")''')
+        obj['_created_at'] = old.get('_created_at', '$ts')
+    except:
+        obj['_created_at'] = '$ts'
+if $new_version > 1:
+    obj['_supersedes'] = '$oid@v$old_version'
+json.dump(obj, open('$tmpnew', 'w'), ensure_ascii=False, indent=2)
+" 2>/dev/null || true
+
+  # Write to disk
+  cp "$tmpnew" "$target"
+
+  # v3 temporal: emit event with before/after snapshots
+  local after; after=$(cat "$target")
+  local evt_dir; evt_dir="$(dirname "$EVENTS_LOG")"
+  mkdir -p "$evt_dir"
+  local uuid; uuid=$(_uuid)
+  python3 -c "
+import json, sys
+before_str = '''$before''' if '''$before''' else 'null'
+after_str = open('$tmpnew').read()
+try:
+    before_obj = json.loads(before_str) if before_str != 'null' else None
+except:
+    before_obj = None
+try:
+    after_obj = json.loads(after_str)
+except:
+    after_obj = None
+
+evt = {
+    'event_id': '$uuid',
+    'event_type': '$event_type',
+    'object_type': '$type',
+    'object_id': '$oid',
+    'agent_id': '$id',
+    'timestamp': '$ts',
+    'data': {},
+    'before': before_obj,
+    'after': after_obj,
+    'object_version': $new_version
+}
+print(json.dumps(evt, ensure_ascii=False))
+" >> "$EVENTS_LOG" 2>/dev/null || true
+
+  rm -f "$tmpnew"
+
+  # Write-through to TOS (best-effort)
+  if [[ -n "$TOS_ACCESS_KEY" && -n "$TOS_BUCKET" ]]; then
+    local key; key=$(_tos_key "$id" "$type" "$oid")
+    _tos_request PUT "$key" "$target" 2>/dev/null || true
+    _update_manifest "$id" 2>/dev/null || true
+  fi
+  echo "wrote: $type/$oid (v$new_version)"
+}
+
+# --- rm (delete local + TOS, v3 temporal: capture before-snapshot) ---
+cmd_rm() {
+  local id="${1:?}" type="${2:?}" oid="${3:?}"
+  _ensure_agent "$id"
+  local f; f="$(_agent_dir "$id")/objects/$type/$oid.json"
+  [[ -f "$f" ]] || { echo "not found: $type/$oid" >&2; exit 1; }
+
+  # v3 temporal: capture before-snapshot and emit delete event with it
+  local before; before=$(cat "$f")
+  local uuid; uuid=$(_uuid)
+  local ts; ts=$(_ts)
+  mkdir -p "$(dirname "$EVENTS_LOG")"
+  python3 -c "
+import json
+try:
+    before_obj = json.loads('''$(cat "$f" | sed "s/'/\\\\'/g")''')
+except:
+    before_obj = None
+evt = {
+    'event_id': '$uuid',
+    'event_type': 'delete',
+    'object_type': '$type',
+    'object_id': '$oid',
+    'agent_id': '$id',
+    'timestamp': '$ts',
+    'data': {},
+    'before': before_obj,
+    'after': None,
+    'object_version': before_obj.get('_version', 0) if before_obj else 0
+}
+print(json.dumps(evt, ensure_ascii=False))
+" >> "$EVENTS_LOG" 2>/dev/null || true
+
+  rm "$f"
+  # Delete from TOS too
+  if [[ -n "$TOS_ACCESS_KEY" && -n "$TOS_BUCKET" ]]; then
+    local key; key=$(_tos_key "$id" "$type" "$oid")
+    _tos_request DELETE "$key" 2>/dev/null || true
+    _update_manifest "$id" 2>/dev/null || true
+  fi
+  echo "deleted: $type/$oid"
+}
+
+# --- link ---
+cmd_link() {
+  local from="${1:?}" to="${2:?}" ltype="${3:?}" props="${4:-\{\}}"
+  _ensure_agent "$from"
+  local dir; dir="$(_agent_dir "$from")/links"
+  mkdir -p "$dir"
+  local ts; ts=$(_ts)
+  python3 -c "
+import json
+link = {'from': '$from', 'to': '$to', 'link_type': '$ltype', 'properties': json.loads('''$props'''), 'created': '$ts'}
+print(json.dumps(link, indent=2))
+" > "$dir/${ltype}--${to}.json"
+  cmd_event "$from" "link" "agent" "$to" "{\"link_type\":\"$ltype\"}" 2>/dev/null || true
+  # Push link + update manifest to TOS
+  if [[ -n "$TOS_ACCESS_KEY" && -n "$TOS_BUCKET" ]]; then
+    local lkey="${TOS_PREFIX}${from}/links/${ltype}--${to}.json"
+    _tos_request PUT "$lkey" "$dir/${ltype}--${to}.json" 2>/dev/null || true
+    _update_manifest "$from" 2>/dev/null || true
+  fi
+  echo "linked: $from --[$ltype]--> $to"
+}
+
+# --- unlink ---
+cmd_unlink() {
+  local from="${1:?}" to="${2:?}" ltype="${3:?}"
+  _ensure_agent "$from"
+  local f; f="$(_agent_dir "$from")/links/${ltype}--${to}.json"
+  [[ -f "$f" ]] || { echo "link not found" >&2; exit 1; }
+  rm "$f"
+  cmd_event "$from" "unlink" "agent" "$to" "{\"link_type\":\"$ltype\"}" 2>/dev/null || true
+  echo "unlinked: $from --[$ltype]--> $to"
+}
+
+# --- links ---
+cmd_links() {
+  local id="${1:?}"
+  _ensure_agent "$id"
+  local dir; dir="$(_agent_dir "$id")/links"
+  [[ -d "$dir" ]] || { echo "(no links)"; return; }
+  for f in "$dir"/*.json; do
+    [[ -f "$f" ]] || continue
+    python3 -c "
+import json
+d = json.load(open('$f'))
+print(f\"{d['from']} --[{d['link_type']}]--> {d['to']}  {json.dumps(d.get('properties',{}))}\")
+"
+  done
+}
+
+# --- event ---
+cmd_event() {
+  local id="${1:?}" etype="${2:?}" otype="${3:?}" oid="${4:?}" data="${5:-\{\}}"
+  mkdir -p "$(dirname "$EVENTS_LOG")"
+  local uuid; uuid=$(_uuid)
+  local ts; ts=$(_ts)
+  python3 -c "
+import json
+evt = {'event_id': '$uuid', 'event_type': '$etype', 'object_type': '$otype', 'object_id': '$oid', 'agent_id': '$id', 'timestamp': '$ts', 'data': json.loads('''$data''')}
+print(json.dumps(evt))
+" >> "$EVENTS_LOG"
+}
+
+# --- events ---
+cmd_events() {
+  local id="${1:-}" tail_n="20"
+  [[ ! -f "$EVENTS_LOG" ]] && { echo "(no events)"; return; }
+  shift || true
+  [[ "${1:-}" == "--tail" ]] && tail_n="${2:-20}"
+  if [[ -n "$id" && "$id" != "--tail" ]]; then
+    grep "\"agent_id\": \"$id\"" "$EVENTS_LOG" 2>/dev/null | tail -n "$tail_n" | python3 -c "
+import json,sys
+for line in sys.stdin:
+  e=json.loads(line)
+  print(f'[{e[\"timestamp\"]}] {e[\"agent_id\"]} {e[\"event_type\"]} {e[\"object_type\"]}/{e[\"object_id\"]}')" 2>/dev/null || true
+  else
+    tail -n "$tail_n" "$EVENTS_LOG" | python3 -c "
+import json,sys
+for line in sys.stdin:
+  e=json.loads(line)
+  print(f'[{e[\"timestamp\"]}] {e[\"agent_id\"]} {e[\"event_type\"]} {e[\"object_type\"]}/{e[\"object_id\"]}')" 2>/dev/null || true
+  fi
+}
+
+# --- history: show version history of an object ---
+cmd_history() {
+  local type="${1:?usage: ofs history <type> <id>}" oid="${2:?}"
+  [[ ! -f "$EVENTS_LOG" ]] && { echo "(no events)"; return; }
+  python3 -c "
+import json, sys
+events = []
+for line in open('$EVENTS_LOG'):
+    try:
+        e = json.loads(line)
+        if e.get('object_type') == '$type' and e.get('object_id') == '$oid':
+            events.append(e)
+    except:
+        pass
+
+if not events:
+    print('(no history found)')
+    sys.exit(0)
+
+print(f'History: $type/$oid ({len(events)} events)')
+print('-' * 72)
+for e in events:
+    ts = e.get('timestamp', '?')
+    et = e.get('event_type', '?')
+    ver = e.get('object_version', '?')
+    agent = e.get('agent_id', '?')
+    reason = e.get('reason', '')
+    reason_str = f'  reason: {reason}' if reason else ''
+    print(f'  [{ts}] v{ver} {et} by {agent}{reason_str}')
+
+    # Show key diffs for updates
+    if et == 'update' and e.get('before') and e.get('after'):
+        before = e['before']
+        after = e['after']
+        for k in set(list(before.keys()) + list(after.keys())):
+            if k.startswith('_'):
+                continue
+            bv = before.get(k)
+            av = after.get(k)
+            if bv != av:
+                bv_s = json.dumps(bv, ensure_ascii=False)[:60] if bv is not None else 'null'
+                av_s = json.dumps(av, ensure_ascii=False)[:60] if av is not None else 'null'
+                print(f'    {k}: {bv_s} → {av_s}')
+" 2>/dev/null
+}
+
+# --- TOS: push local → TOS ---
+cmd_push() {
+  _ensure_tos
+  local id="${1:?usage: ofs push <agent_id> [type] [id]}"
+  _ensure_agent "$id"
+  local type="${2:-}" oid="${3:-}"
+  local count=0
+
+  if [[ -n "$type" && -n "$oid" ]]; then
+    # Push single object
+    local f; f="$(_agent_dir "$id")/objects/$type/$oid.json"
+    [[ -f "$f" ]] || { echo "not found locally: $type/$oid" >&2; exit 1; }
+    local key; key=$(_tos_key "$id" "$type" "$oid")
+    _tos_request PUT "$key" "$f" && echo "  pushed: $type/$oid" && count=1
+  else
+    # Push all objects for agent
+    local d; d=$(_agent_dir "$id")/objects
+    find "$d" -name "*.json" 2>/dev/null | while read -r f; do
+      local rel="${f#$d/}"
+      local t="${rel%%/*}"
+      local o="${rel#*/}"; o="${o%.json}"
+      local key; key=$(_tos_key "$id" "$t" "$o")
+      _tos_request PUT "$key" "$f" && echo "  pushed: $t/$o"
+    done
+    count=$(find "$d" -name "*.json" 2>/dev/null | wc -l)
+  fi
+  _update_manifest "$id"
+  echo "pushed $count object(s) to TOS for $id (manifest updated)"
+}
+
+# --- TOS: pull TOS → local ---
+cmd_pull() {
+  _ensure_tos
+  local id="${1:?usage: ofs pull <agent_id> [type] [id]}"
+  cmd_init "$id" >/dev/null 2>&1 || true
+  local type="${2:-}" oid="${3:-}"
+
+  if [[ -n "$type" && -n "$oid" ]]; then
+    # Pull single object
+    local key; key=$(_tos_key "$id" "$type" "$oid")
+    local content; content=$(_tos_request GET "$key")
+    [[ -z "$content" ]] && { echo "not found in TOS: $type/$oid" >&2; exit 1; }
+    local dir; dir="$(_agent_dir "$id")/objects/$type"
+    mkdir -p "$dir"
+    echo "$content" > "$dir/$oid.json"
+    echo "  pulled: $type/$oid"
+  else
+    # Pull all — list keys under agent prefix, then GET each
+    local prefix="${TOS_PREFIX}${id}/"
+    local listing; listing=$(_tos_request LIST "$prefix")
+    [[ -z "$listing" ]] && { echo "no objects in TOS for $id"; return; }
+    # Parse keys from JSON/XML listing
+    echo "$listing" | python3 -c "
+import sys, json, re
+data = sys.stdin.read()
+# Try JSON first
+try:
+    parsed = json.loads(data)
+    payload = parsed.get('payload', parsed)
+    objects = payload.get('objects', [])
+    for obj in objects:
+        key = obj.get('key', obj.get('Key', ''))
+        if key: print(key)
+except:
+    # Fallback: XML <Key>...</Key>
+    for m in re.finditer(r'<Key>([^<]+)</Key>', data):
+        print(m.group(1))
+" 2>/dev/null | while read -r fullkey; do
+      # fullkey = ofs/<agent_id>/<type>/<id>.json
+      local rel="${fullkey#${TOS_PREFIX}${id}/}"
+      local t="${rel%%/*}"
+      local o="${rel#*/}"; o="${o%.json}"
+      local dir; dir="$(_agent_dir "$id")/objects/$t"
+      mkdir -p "$dir"
+      _tos_request GET "$fullkey" > "$dir/$o.json" 2>/dev/null && echo "  pulled: $t/$o"
+    done
+  fi
+}
+
+# --- TOS: list remote ---
+cmd_tos_ls() {
+  _ensure_tos
+  local id="${1:-}"
+  local prefix="${TOS_PREFIX}${id}"
+  [[ -n "$id" ]] && prefix="${prefix}/"
+  local listing; listing=$(_tos_request LIST "$prefix")
+  [[ -z "$listing" ]] && { echo "(empty)"; return; }
+  echo "$listing" | python3 -c "
+import sys, json, re
+data = sys.stdin.read()
+prefix = '${TOS_PREFIX}'
+try:
+    parsed = json.loads(data)
+    payload = parsed.get('payload', parsed)
+    for obj in payload.get('objects', []):
+        key = obj.get('key', obj.get('Key', ''))
+        if key: print(key[len(prefix):] if key.startswith(prefix) else key)
+except:
+    for m in re.finditer(r'<Key>([^<]+)</Key>', data):
+        k = m.group(1)
+        print(k[len(prefix):] if k.startswith(prefix) else k)
+" 2>/dev/null | sort
+}
+
+# --- TOS: read remote ---
+cmd_tos_read() {
+  _ensure_tos
+  local id="${1:?}" type="${2:?}" oid="${3:?}"
+  local key; key=$(_tos_key "$id" "$type" "$oid")
+  local content; content=$(_tos_request GET "$key")
+  [[ -z "$content" ]] && { echo "not found in TOS: $id/$type/$oid" >&2; exit 1; }
+  echo "$content"
+}
+
+# --- TOS: write remote ---
+cmd_tos_write() {
+  _ensure_tos
+  local id="${1:?}" type="${2:?}" oid="${3:?}" file="${4:-}"
+  local key; key=$(_tos_key "$id" "$type" "$oid")
+  if [[ -n "$file" ]]; then
+    _tos_request PUT "$key" "$file"
+  else
+    local tmp; tmp=$(mktemp)
+    cat > "$tmp"
+    _tos_request PUT "$key" "$tmp"
+    rm -f "$tmp"
+  fi
+  echo "tos-wrote: $id/$type/$oid"
+}
+
+# --- TOS: sync ---
+cmd_sync() {
+  _ensure_tos
+  local id="${1:?usage: ofs sync <agent_id>}"
+  _ensure_agent "$id"
+  echo "=== pull from TOS ==="
+  cmd_pull "$id"
+  echo "=== push to TOS ==="
+  cmd_push "$id"
+  echo "=== sync complete ==="
+}
+
+# --- discover: pull all manifests from TOS ---
+cmd_discover() {
+  _ensure_tos
+  local found=0
+  # Scan all locally known agents + well-known agent IDs
+  local all_ids=""
+  # From local registry
+  for d in "$AGENTS_DIR"/*/; do
+    [[ -d "$d" ]] && all_ids="$all_ids $(basename "$d")"
+  done
+  # Well-known system agents
+  for wk in sys-diagnosis sys-bot sys-inspection; do
+    echo "$all_ids" | grep -qw "$wk" || all_ids="$all_ids $wk"
+  done
+
+  for aid in $all_ids; do
+    local mkey="${TOS_PREFIX}${aid}/manifest.json"
+    local content; content=$(_tos_request GET "$mkey" 2>/dev/null) || true
+    [[ -z "$content" ]] && continue
+    # Skip error responses
+    if echo "$content" | grep -q '"error"' 2>/dev/null; then continue; fi
+    found=$((found + 1))
+    echo "$content" | python3 -c "
+import json, sys
+m = json.loads(sys.stdin.read())
+aid = m.get('agent_id','?')
+atype = m.get('agent_type','?')
+host = m.get('host','?')
+updated = m.get('updated','?')
+total = m.get('total_objects', 0)
+types = ', '.join(f'{k}:{v}' for k,v in m.get('objects',{}).items())
+shares = ', '.join(m.get('shares',[])) or '(none)'
+caps = ', '.join(m.get('capabilities',[])) or '(none)'
+print(f'  {aid:20s} {atype:12s} {host:18s} objects={total:4d}  [{types}]')
+print(f'  {\"\":20s} updated={updated}  caps=[{caps}]  shares=[{shares}]')
+" 2>/dev/null
+  done
+  if [[ $found -eq 0 ]]; then
+    echo "(no manifests found in TOS — agents need to push first)"
+  fi
+}
+
+# --- register ---
+cmd_register() {
+  local id="${1:?}" atype="${2:?}" host="${3:?}" caps="${4:-[]}"
+  cmd_init "$id" >/dev/null 2>&1 || true
+  local d; d=$(_agent_dir "$id")
+  local ts; ts=$(_ts)
+  python3 -c "
+import json
+agent = {'agent_id': '$id', 'agent_type': '$atype', 'host': '$host', 'capabilities': json.loads('''$caps'''), 'status': 'active', 'last_heartbeat': '$ts'}
+print(json.dumps(agent, indent=2))
+" > "$d/agent.json"
+  echo "registered: $id ($atype) @ $host"
+}
+
+# --- agents ---
+cmd_agents() {
+  for d in "$AGENTS_DIR"/*/; do
+    [[ -d "$d" ]] || continue
+    local id; id=$(basename "$d")
+    if [[ -f "$d/agent.json" ]]; then
+      python3 -c "
+import json
+a = json.load(open('$d/agent.json'))
+print(f\"  {a['agent_id']:20s} {a.get('agent_type','?'):15s} {a.get('host','?'):20s} {a.get('status','?')}\")
+"
+    else
+      echo "  $id  (not registered)"
+    fi
+  done
+}
+
+# --- whoami ---
+cmd_whoami() {
+  echo "OFS_ROOT:    $OFS_ROOT"
+  echo "Ontology:    $ONTOLOGY"
+  echo "TOS_BUCKET:  ${TOS_BUCKET:-(not set)}"
+  echo "TOS_ACCESS:  ${TOS_ACCESS_KEY:+(set)}"
+  echo "Agents:      $(ls "$AGENTS_DIR" 2>/dev/null | tr '\n' ' ')"
+}
+
+# --- tree ---
+cmd_tree() {
+  local id="${1:-}"
+  if [[ -n "$id" ]]; then
+    _ensure_agent "$id"
+    find "$(_agent_dir "$id")" -type f | sed "s|$AGENTS_DIR/||" | sort
+  else
+    find "$OFS_ROOT" -maxdepth 3 -type f -o -type l | sed "s|$OFS_ROOT/||" | sort | head -50
+  fi
+}
+
+# --- main ---
+cmd="${1:-help}"; shift || true
+case "$cmd" in
+  schema)     cmd_schema "$@" ;;
+  init)       cmd_init "$@" ;;
+  ls)         cmd_ls "$@" ;;
+  read)       cmd_read "$@" ;;
+  write)      cmd_write "$@" ;;
+  rm)         cmd_rm "$@" ;;
+  link)       cmd_link "$@" ;;
+  unlink)     cmd_unlink "$@" ;;
+  links)      cmd_links "$@" ;;
+  history)    cmd_history "$@" ;;
+  event)      cmd_event "$@" ;;
+  events)     cmd_events "$@" ;;
+  push)       cmd_push "$@" ;;
+  pull)       cmd_pull "$@" ;;
+  tos-ls)     cmd_tos_ls "$@" ;;
+  tos-read)   cmd_tos_read "$@" ;;
+  tos-write)  cmd_tos_write "$@" ;;
+  sync)       cmd_sync "$@" ;;
+  discover)   cmd_discover "$@" ;;
+  register)   cmd_register "$@" ;;
+  agents)     cmd_agents ;;
+  whoami)     cmd_whoami ;;
+  tree)       cmd_tree "$@" ;;
+  help|-h|--help) usage ;;
+  *) echo "unknown command: $cmd" >&2; usage; exit 1 ;;
+esac

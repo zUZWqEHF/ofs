@@ -1,0 +1,16 @@
+# Link: delegates-to
+# Agent 间的委托关系 (Single Select: 只选最佳结果，不合并)
+link: delegates-to
+description: "Agent A 委托 Agent B 执行子任务 (Single Select 原则)"
+source_type: agent
+target_type: agent
+properties:
+  task_type:
+    type: string
+    description: "委托的任务类型"
+  status:
+    type: string
+    enum: [pending, running, selected, rejected]
+  selected:
+    type: boolean
+    description: "该结果是否被选中 (Single Select, No Merge)"

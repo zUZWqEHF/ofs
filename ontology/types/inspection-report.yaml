@@ -1,0 +1,33 @@
+# Object Type: Inspection Report
+# 巡检 Agent 产出的巡检报告
+type: inspection-report
+description: "24h 巡检循环产出的报告"
+primary_key: report_id
+properties:
+  report_id:
+    type: string
+    required: true
+    description: "报告 ID (timestamp-based)"
+  timestamp:
+    type: datetime
+  round:
+    type: integer
+    description: "巡检轮次"
+  risk_items:
+    type: json
+    description: "风险项列表 (array of objects: [{level, psm, description}])"
+  high_risk_count:
+    type: integer
+  medium_risk_count:
+    type: integer
+  low_risk_count:
+    type: integer
+  data_quality_score:
+    type: float
+    description: "数据质量分数 (0-100)"
+  review_status:
+    type: string
+    enum: [pending, approved, rejected]
+  reviewer:
+    type: string
+    description: "review 来源 (diagnosis-agent / self-drive)"

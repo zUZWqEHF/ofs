@@ -1,0 +1,32 @@
+# Object Type: Datacenter
+# 机房/VDC 实体，代表一个物理或逻辑数据中心
+type: datacenter
+description: "数据中心/机房，包含 VRegion、VDC 级别的拓扑信息"
+primary_key: dc_id
+properties:
+  dc_id:
+    type: string
+    required: true
+    description: "机房标识 (e.g., MYCISB, SGCISA, LF, HL)"
+  region:
+    type: string
+    description: "所属区域 (e.g., Asia-CIS, CN-North)"
+  vregion:
+    type: string
+    description: "VRegion 标识"
+  dc_type:
+    type: string
+    enum: [primary, dr, satellite]
+    description: "机房类型: 主机房/容灾/卫星"
+  location:
+    type: string
+    description: "地理位置 (e.g., 马来西亚, 新加坡, 廊坊)"
+  status:
+    type: string
+    enum: [active, building, planned, decommissioned]
+  dr_pair:
+    type: string
+    description: "容灾对端机房 ID"
+  traffic_ratio:
+    type: string
+    description: "流量比例 (e.g., 80:20)"

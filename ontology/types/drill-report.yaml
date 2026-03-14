@@ -1,0 +1,43 @@
+# Object Type: Drill Report
+# 容灾演练报告，记录演练目标、执行、复盘
+type: drill-report
+description: "容灾演练执行报告与复盘"
+primary_key: drill_id
+properties:
+  drill_id:
+    type: string
+    required: true
+    description: "演练标识 (e.g., cn-lf-20250424)"
+  title:
+    type: string
+    required: true
+  drill_date:
+    type: string
+    description: "演练日期"
+  drill_type:
+    type: string
+    enum: [cutover, island, fault-injection, full]
+    description: "演练类型: 切流/孤岛/故障注入/全链路"
+  target_dc:
+    type: string
+    description: "目标机房"
+  scope:
+    type: string
+    description: "演练范围描述"
+  result:
+    type: string
+    enum: [success, partial, failed]
+  issues_found:
+    type: json
+    description: "发现的问题 (array)"
+  action_items:
+    type: json
+    description: "后续改进项 (array)"
+  participants:
+    type: json
+    description: "参与团队/人员"
+  source_url:
+    type: string
+  content:
+    type: string
+    description: "完整报告内容"

@@ -1,0 +1,34 @@
+# Object Type: Diagnosis Report
+# 诊断产出的根因分析报告
+type: diagnosis-report
+description: "告警驱动诊断产出的根因分析报告"
+primary_key: report_id
+properties:
+  report_id:
+    type: string
+    required: true
+  timestamp:
+    type: datetime
+  source:
+    type: string
+    enum: [agent, self-drive]
+    description: "产出来源: LLM agent 或 规则引擎"
+  alert_count:
+    type: integer
+  psm_count:
+    type: integer
+  top_category:
+    type: string
+    description: "占比最高的归因分类"
+  categories:
+    type: json
+    description: "各归因分类计数 (map of category to count)"
+  topology_data:
+    type: json
+    description: "拓扑查询结果 (object)"
+  conclusion:
+    type: string
+    description: "诊断结论文本"
+  sent_to_group:
+    type: boolean
+    default: false
