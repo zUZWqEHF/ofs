@@ -119,29 +119,148 @@ Step 4: ofs ls <agent> | grep <keyword> → 最后手段
 
 ---
 
-## ByteCloud Skills 调用
+## 调用技能 — 完整流程
 
-### 发现技能
+用户提需求时，按以下流程执行。**唯一入口是 SSO Cookie。**
+
+### 1. 发现
 
 ```bash
+# 按分类找
+ofs read authn-crawler runbook catalog-<类目>  # 返回 members 列表
+
+# 按关键词找
 ofs ls authn-crawler | grep -i <关键词>
-ofs read authn-crawler runbook rb-skill-<name>           # 操作指南: actions + endpoints + params
-ofs read authn-crawler service bytecloud.skill.<name>    # 元数据 + 鉴权信息
-ofs read authn-crawler tool-execution-record mcp-tool-<id>  # MCP tool 详情
+
+# 读详情
+ofs read authn-crawler runbook rb-skill-<name>         # Skill 操作指南
+ofs read authn-crawler tool-execution-record tested-<server>-<tool>  # MCP tool (含 inputSchema)
 ```
 
-每个 runbook 包含: `actions`, `api_endpoints`, `parameters`, `required_headers`, `source_url` (详细文档按需 GET)。
-
-### 调用 MCP Tool
+### 2. 确保有 JWT
 
 ```bash
+# 检查缓存
+if [ ! -f /tmp/bc_jwt.txt ] || [ "$(python3 -c "
+import json,base64,time,sys
+t=open('/tmp/bc_jwt.txt').read().strip().split('.')[1]
+t+='='*(4-len(t)%4)
+print('expired' if json.loads(base64.urlsafe_b64decode(t)).get('exp',0)<time.time() else 'valid')
+" 2>/dev/null)" != "valid" ]; then
+  # 换 JWT (需要 SSO Cookie)
+  SSO_COOKIE=$(cat /tmp/sso_cookies.txt)
+  curl -s -L -b "$SSO_COOKIE" -c /tmp/bc_jar.txt \
+    "https://sso.bytedance.com/cas/login?service=https://cloud.bytedance.net/auth/api/v1/login?next=/" -o /dev/null
+  curl -s -D- -b /tmp/bc_jar.txt -b "$SSO_COOKIE" \
+    "https://cloud.bytedance.net/auth/api/v1/jwt" | \
+    grep 'x-jwt-token:' | sed 's/x-jwt-token: //' | tr -d '\r\n' > /tmp/bc_jwt.txt
+fi
 JWT=$(cat /tmp/bc_jwt.txt)
-# POST endpoint → initialize → tools/list → tools/call
-curl -X POST "$MCP_ENDPOINT" \
+```
+
+### 3a. 调用 ByteCloud Skill API
+
+从 `ofs read authn-crawler runbook rb-skill-<name>` 取 `api_endpoints` + `required_headers`:
+
+```bash
+# 例: sensight 查微博热搜
+curl -X POST "https://llmlink.bytedance.net/trendflow/tool/get_event_board" \
+  -H "Content-Type: application/json" \
+  -H "x-source: sensight-skill" \
+  -H "x-skill-version: 0.2.0" \
+  -d '{"ranking_id": "12549"}'
+```
+
+Skill API 有的不需要 JWT（sensight 等），有的需要。看 runbook 里的 `required_headers`。
+
+### 3b. 调用 ByteCloud MCP Tool (完整 3 步)
+
+从 `ofs read authn-crawler tool-execution-record tested-<server>-<tool>` 取:
+- `mcp_endpoint` → 调用 URL
+- `tool_name` → 调用的 tool
+- `inputSchema` → 参数定义
+- `test_args` → 验证过的参数示例
+
+**Step 1: initialize**
+```bash
+ENDPOINT="<mcp_endpoint from OFS>"
+RESP=$(curl -s -X POST "$ENDPOINT" \
+  -H "x-jwt-token: $JWT" \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"claude","version":"1.0"}}}')
+# 从 SSE 响应解析 session ID (如果有)
+SESSION_ID=$(echo "$RESP" | grep -oP 'Mcp-Session-Id:\s*\K\S+' || true)
+```
+
+**Step 2: tools/call**
+```bash
+# 用 OFS 里的 inputSchema 构造参数
+curl -s -X POST "$ENDPOINT" \
+  -H "x-jwt-token: $JWT" \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  ${SESSION_ID:+-H "Mcp-Session-Id: $SESSION_ID"} \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/call",
+    "params": {
+      "name": "<tool_name from OFS>",
+      "arguments": { <根据 inputSchema 填参数> }
+    }
+  }'
+```
+
+**完整例子 — 查 MR 信息:**
+```bash
+# OFS 告诉我们:
+#   endpoint: https://158h4pul.mcp.bytedance.net/mcp
+#   tool: get_merge_request_info
+#   inputSchema: {project_id: number, iid: number}
+
+JWT=$(cat /tmp/bc_jwt.txt)
+EP="https://158h4pul.mcp.bytedance.net/mcp"
+
+# initialize
+curl -s -X POST "$EP" \
   -H "x-jwt-token: $JWT" -H "Content-Type: application/json" \
   -H "Accept: text/event-stream" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{}}}'
+
+# call
+curl -s -X POST "$EP" \
+  -H "x-jwt-token: $JWT" -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_merge_request_info","arguments":{"project_id":12345,"iid":1}}}'
 ```
+
+**401 时自动重试:** 如果返回 401，重新执行 Step 2 换 JWT，然后重试。
+
+### 3c. 调用 ByteGraph MCP (不需要 JWT)
+
+```bash
+EP="http://cis-sre-cmdb-bytegraph-mcp.bytedance.net/mcp"
+# initialize
+curl -s -X POST "$EP" -H "Content-Type: application/json" -H "Accept: text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{}}}'
+# 从 response header 取 Mcp-Session-Id，后续请求带上
+```
+
+### OFS tool 对象结构说明
+
+每个 `tool-execution-record/tested-*` 对象包含:
+
+| 字段 | 说明 | 用途 |
+|------|------|------|
+| `tool_name` | tool 名 | tools/call 的 name |
+| `mcp_endpoint` | MCP server URL | curl 的 URL |
+| `inputSchema` | 完整参数定义 | 构造 arguments |
+| `test_args` | 验证过的参数 | 直接可用的示例 |
+| `test_success` | 是否实测通过 | 判断可用性 |
+| `description` | 功能描述 | 理解 tool 用途 |
+| `is_query_safe` | 是否查询类 | true=安全调用 |
+| `auth_method` | 鉴权方式 | 决定用什么 header |
 
 ### JWT Region 规则
 
@@ -152,10 +271,10 @@ curl -X POST "$MCP_ENDPOINT" \
 
 ### 平台鉴权速查
 
-| 平台 | header | 来源 |
-|------|--------|------|
+| 平台 | header | 怎么拿 |
+|------|--------|--------|
 | ByteCloud Skills/MCP/AIME | `x-jwt-token: $JWT` | SSO→CAS→JWT (cn) |
-| MCP Hub / Agent Marketplace | `Cookie: bd_sso_3b6da9=$COOKIE` | SSO Cookie 直接 |
+| MCP Hub / Agent Marketplace | `Cookie: bd_sso_3b6da9=<cookie>` | SSO Cookie 直接 |
 | ByteGraph MCP | `Mcp-Session-Id: $SID` | POST initialize |
 | Trae | (无) | 公开 |
 | Coze | `Authorization: Bearer $PAT` | 独立 IdP |
