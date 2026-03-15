@@ -1,0 +1,6 @@
+Place your ontology schemas here:
+  types/<name>.yaml    — Object type definitions
+  links/<name>.yaml    — Relationship type definitions
+  actions/<name>.sh    — Executable action scripts
+
+See README.md for schema format.
