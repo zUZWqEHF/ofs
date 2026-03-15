@@ -23,10 +23,16 @@ ofs register my-claude claude $(hostname) '["code","search"]'
 ### Step 1: 同步全量 OFS 知识
 
 ```bash
-# 同步所有 agent 的数据
+# 方式 A: TOS 直连 (内网，需要 ~/.ofs/tos.env)
 ofs pull authn-crawler    # ByteCloud Skills + MCP Tools 索引
 ofs pull wiki-crawler     # SRE 知识库 (SOP/预案/告警/runbook)
 ofs pull authn-test       # 146K 全平台技能索引 (含 AI Skills Hub)
+
+# 方式 B: Dashboard API (外网/Mac，无需 TOS 凭证)
+# 如果 ofs pull 报 "TOS_ACCESS_KEY must be set"，改用 sync.sh:
+bash examples/claude-code/sync.sh
+# 或创建到 ~/.ofs/sync.sh 后执行:
+cp examples/claude-code/sync.sh ~/.ofs/sync.sh && ~/.ofs/sync.sh
 ```
 
 如果 `authn-crawler` 对象数 < 100，需要爬取（进入 Step 2）。否则跳到 Step 3。
