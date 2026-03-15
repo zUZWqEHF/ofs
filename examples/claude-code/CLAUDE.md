@@ -18,12 +18,41 @@ cp cli/ofs /usr/local/bin/ofs && chmod +x /usr/local/bin/ofs
 ofs init my-claude
 ofs register my-claude claude $(hostname) '["code","search"]'
 
-# 3. (可选) 配置 TOS 实现 Agent 间共享
+# 3a. (内网) 配置 TOS 实现 Agent 间共享
 cat > ~/.ofs/tos.env << EOF
 TOS_ACCESS_KEY=your_key
 TOS_SECRET_KEY=your_secret
 TOS_BUCKET=your_bucket
 EOF
+
+# 3b. (外网/Mac) 通过 Dashboard API 同步 — 无需 TOS 直连
+#     创建 ~/.ofs/sync.sh 用于拉取共享数据:
+cat > ~/.ofs/sync.sh << 'SYNCEOF'
+#!/bin/bash
+# OFS remote sync via Dashboard API (for external networks)
+DASHBOARD_URL="${OFS_DASHBOARD_URL:-https://harness-admin-dashboard.byteintl.net}"
+TOKEN="${OFS_SYNC_TOKEN:-harness-dev-2026-cis-sre}"
+OFS_ROOT="${OFS_ROOT:-$HOME/.ofs}"
+
+for agent in wiki-crawler; do
+  echo "Syncing $agent..."
+  data=$(curl -sf -H "Authorization: Bearer $TOKEN" "$DASHBOARD_URL/api/ofs/export?agent=$agent" 2>/dev/null)
+  [ -z "$data" ] && echo "  failed to fetch $agent" && continue
+  echo "$data" | python3 -c "
+import json, sys, os
+data = json.load(sys.stdin)
+agent = data.get('agent_id','')
+for obj in data.get('objects',[]):
+    t, oid = obj['type'], obj['id']
+    d = os.path.join(os.path.expanduser('~'), '.ofs', 'agents', agent, 'objects', t)
+    os.makedirs(d, exist_ok=True)
+    with open(os.path.join(d, oid + '.json'), 'w') as f:
+        json.dump(obj['data'], f, ensure_ascii=False, indent=2)
+print(f'  synced {len(data.get(\"objects\",[]))} objects for {agent}')
+"
+done
+SYNCEOF
+chmod +x ~/.ofs/sync.sh
 ```
 
 ## 加到 CLAUDE.md 的内容
