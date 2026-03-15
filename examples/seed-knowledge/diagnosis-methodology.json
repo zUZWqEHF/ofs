@@ -1,0 +1,21 @@
+{
+  "topic": "diagnosis-methodology",
+  "title": "告警根因定位方法论",
+  "content": "1.用ByteGraph查告警PSM上下游→圈爆炸半径 2.对半径内每个PSM查TCE→CPU/副本 3.查Argos基建指标→DFlow/RDS/Kafka 4.用OFS读相关SOP和历史告警 5.综合判断根因",
+  "steps": [
+    "bytegraph-topology",
+    "tce-cpu-check",
+    "argos-infra-check",
+    "ofs-knowledge-lookup",
+    "conclusion"
+  ],
+  "_refs": [
+    "knowledge/bytegraph-usage",
+    "knowledge/tce-usage",
+    "knowledge/argos-usage"
+  ],
+  "_version": 1,
+  "_valid_from": "2026-03-15T20:06:32Z",
+  "_updated_at": "2026-03-15T20:06:32Z",
+  "_created_at": "2026-03-15T20:06:32Z"
+}

@@ -1,0 +1,18 @@
+{
+  "topic": "psm-discovery",
+  "title": "如何查找 PSM (服务名)",
+  "content": "PSM 格式: <org>.<team>.<service>，常见前缀: cis./ea./lark./byte./inf./base。用户说people → 试 cis.people.api/web/admin/rpc/background。ByteGraph 存的 ID 是 psm:tce 格式。用 bytegraph-query.sh 精确查。TCE tce_services 不支持模糊搜索。",
+  "examples": [
+    "cis.people.api",
+    "ea.uams.api",
+    "lark.approval.instance"
+  ],
+  "_refs": [
+    "knowledge/bytegraph-usage",
+    "knowledge/tce-usage"
+  ],
+  "_version": 1,
+  "_valid_from": "2026-03-15T20:06:31Z",
+  "_updated_at": "2026-03-15T20:06:31Z",
+  "_created_at": "2026-03-15T20:06:31Z"
+}

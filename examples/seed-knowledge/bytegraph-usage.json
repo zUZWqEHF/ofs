@@ -1,0 +1,20 @@
+{
+  "topic": "bytegraph-usage",
+  "title": "ByteGraph CMDB 查询方法",
+  "content": "ByteGraph 存 CMDB 拓扑。用 bash scripts/diagnosis/bytegraph-query.sh 查。查 PSM 是否存在: g.V().has(type,Service).has(id,<psm>:tce).properties(id)。查上游: .in(CALL)。查下游: .out(CALL)。查归属: .out(OWNED_BY)。注意: 不支持模糊搜索(Text.contains不行)，必须精确 ID。",
+  "commands": {
+    "check_exists": "bash scripts/diagnosis/bytegraph-query.sh 'g.V().has(\"type\",\"Service\").has(\"id\",\"<psm>:tce\").properties(\"id\")'",
+    "upstream": "bash scripts/diagnosis/bytegraph-query.sh 'g.V().has(\"type\",\"Service\").has(\"id\",\"<psm>:tce\").in(\"CALL\").properties(\"id\")'",
+    "downstream": "bash scripts/diagnosis/bytegraph-query.sh 'g.V().has(\"type\",\"Service\").has(\"id\",\"<psm>:tce\").out(\"CALL\").properties(\"id\")'",
+    "owner": "bash scripts/diagnosis/bytegraph-query.sh 'g.V().has(\"type\",\"Service\").has(\"id\",\"<psm>:tce\").out(\"OWNED_BY\").properties(\"id\")'",
+    "all_in_org": "尝试 cis.<team>.api/web/admin/rpc/background 等常见后缀"
+  },
+  "_refs": [
+    "knowledge/psm-discovery",
+    "knowledge/tce-usage"
+  ],
+  "_version": 1,
+  "_valid_from": "2026-03-15T20:06:31Z",
+  "_updated_at": "2026-03-15T20:06:31Z",
+  "_created_at": "2026-03-15T20:06:31Z"
+}

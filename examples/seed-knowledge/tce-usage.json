@@ -1,0 +1,17 @@
+{
+  "topic": "tce-usage",
+  "title": "TCE 容器查询方法",
+  "content": "TCE 查 CPU/副本/集群。用 python3 scripts/diagnosis/tce-mcp-query.py --psm <精确PSM名>。需要精确 PSM 名，不支持模糊。先用 ByteGraph 确认 PSM 存在再查 TCE。",
+  "commands": {
+    "cpu": "python3 scripts/diagnosis/tce-mcp-query.py --psm cis.people.api",
+    "note": "返回 cluster_count, clusters[].cpu_usage_pct, clusters[].vregion"
+  },
+  "_refs": [
+    "knowledge/psm-discovery",
+    "knowledge/bytegraph-usage"
+  ],
+  "_version": 1,
+  "_valid_from": "2026-03-15T20:06:31Z",
+  "_updated_at": "2026-03-15T20:06:31Z",
+  "_created_at": "2026-03-15T20:06:31Z"
+}
