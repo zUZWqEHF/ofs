@@ -1,0 +1,31 @@
+{
+  "topic": "ofs-usage-patterns",
+  "summary": "Recommended ways to use OFS during daily agent work.",
+  "patterns": [
+    {
+      "scenario": "Code review — found an issue",
+      "type": "finding",
+      "example": "{\"file\":\"src/api.ts\",\"issue\":\"SQL injection\",\"severity\":\"high\",\"fix\":\"use parameterized queries\"}"
+    },
+    {
+      "scenario": "Research conclusion",
+      "type": "research",
+      "example": "{\"topic\":\"auth flow\",\"conclusion\":\"use OIDC device grant\",\"references\":[\"rfc8628\"]}"
+    },
+    {
+      "scenario": "Architecture decision",
+      "type": "architecture",
+      "example": "{\"decision\":\"migrate to gRPC\",\"reason\":\"reduce latency by 40%\",\"date\":\"2026-03-15\"}"
+    },
+    {
+      "scenario": "Bug fix record",
+      "type": "bugfix",
+      "example": "{\"file\":\"cli/ofs\",\"bug\":\"version not incrementing\",\"root_cause\":\"missing python3 fallback\",\"fix\":\"added try/except\"}"
+    },
+    {
+      "scenario": "Read another agent's knowledge",
+      "type": "pull",
+      "example_commands": ["ofs discover", "ofs pull <other-agent>", "ofs ls <other-agent>", "ofs read <other-agent> <type> <id>"]
+    }
+  ]
+}

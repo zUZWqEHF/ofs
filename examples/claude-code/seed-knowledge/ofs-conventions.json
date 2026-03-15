@@ -1,0 +1,20 @@
+{
+  "topic": "ofs-conventions",
+  "summary": "Core design conventions of the OFS system.",
+  "conventions": [
+    "Write-through: ofs write auto-syncs to TOS if credentials are set",
+    "Append-only events: all mutations recorded with before/after snapshots",
+    "Automatic version chain: _version auto-increments, _supersedes points to previous",
+    "No auto-decay: agents judge freshness via _updated_at, nothing is auto-deleted",
+    "Decentralized: no central server, each agent manages its own data space",
+    "TOS as shared bus: peer-to-peer context exchange via object storage"
+  ],
+  "cli_patterns": {
+    "write": "echo '{...}' | ofs write <agent_id> <type> <id>",
+    "read": "ofs read <agent_id> <type> <id>",
+    "list": "ofs ls <agent_id>",
+    "history": "ofs history <type> <id>",
+    "discover": "ofs discover",
+    "sync": "ofs sync <agent_id>"
+  }
+}

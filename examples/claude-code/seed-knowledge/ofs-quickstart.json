@@ -1,0 +1,20 @@
+{
+  "topic": "ofs-quickstart",
+  "summary": "OFS (Ontology File System) is a decentralized agent context system. No central server. Each agent owns ~/.ofs/agents/<id>/. Agents exchange context via TOS object storage.",
+  "setup_steps": [
+    "cp cli/ofs ~/bin/ofs && chmod +x ~/bin/ofs",
+    "ofs init <your-agent-id>",
+    "ofs register <your-agent-id> claude $(hostname) '[\"code\",\"search\"]'"
+  ],
+  "key_files": [
+    "cli/ofs — single bash script CLI (bash + python3)",
+    "examples/claude-code/CLAUDE.md — Claude Code integration guide",
+    "examples/claude-code/seed-knowledge/ — bootstrap knowledge for new agents"
+  ],
+  "data_layout": {
+    "objects": "~/.ofs/agents/<id>/objects/<type>/<id>.json",
+    "links": "~/.ofs/agents/<id>/links/<link_type>--<target>.json",
+    "events": "~/.ofs/events/events.jsonl",
+    "agent_meta": "~/.ofs/agents/<id>/agent.json"
+  }
+}

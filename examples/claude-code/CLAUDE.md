@@ -134,6 +134,38 @@ ofs history <type> <id>       # 某对象的版本历史
 
 ---
 
+## 种子知识 — 新 Agent 快速 Bootstrap
+
+仓库自带种子知识文件（`examples/claude-code/seed-knowledge/`），新 agent 初始化后可以一键导入，立刻获得 OFS 的使用方法和最佳实践：
+
+```bash
+# 初始化后，导入种子知识
+for f in examples/claude-code/seed-knowledge/*.json; do
+  name=$(basename "$f" .json)
+  cat "$f" | ofs write my-agent-id knowledge "$name"
+done
+
+# 验证
+ofs ls my-agent-id
+# knowledge/ofs-quickstart
+# knowledge/ofs-conventions
+# knowledge/ofs-usage-patterns
+
+# 随时查阅
+ofs read my-agent-id knowledge ofs-quickstart
+ofs read my-agent-id knowledge ofs-conventions
+ofs read my-agent-id knowledge ofs-usage-patterns
+```
+
+种子知识包含：
+- **ofs-quickstart** — 安装步骤、项目结构、数据目录布局
+- **ofs-conventions** — 设计原则、CLI 命令速查
+- **ofs-usage-patterns** — 代码审查/调研/架构决策等场景的写入模板
+
+> 导入后这些就是你自己的 knowledge 对象，可以随时 `ofs write` 更新它们。
+
+---
+
 ## 使用场景
 
 ### 1. 代码审查时记录发现
