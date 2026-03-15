@@ -203,9 +203,24 @@ done
 
 | Agent | 数据 | 说明 |
 |-------|------|------|
-| authn-crawler | 1K+ skills/tools | ByteCloud Skills + MCP 索引 |
+| authn-crawler | 1K+ skills/tools | ByteCloud Skills + MCP 索引 + 10 个分类 catalog |
 | authn-test | 146K objects | 全平台技能 + 帮助文档 |
-| wiki-crawler | 475 objects | SRE 知识库 (SOP/预案/告警) |
+| wiki-crawler | 475 objects | SRE 知识库 (SOP/预案/告警/datacenter) |
 | sys-diagnosis | - | 告警诊断 agent |
 | sys-bot | - | 飞书问答 agent |
 | sys-inspection | 3 reports | CMDB 巡检 agent |
+
+### 分类 Catalog 索引
+
+| catalog | 内容 |
+|---------|------|
+| catalog-monitoring | Argos, Grafana, Metrics, Slardar, Oncall |
+| catalog-database | RDS, MySQL, Redis, Cache, ClickHouse, HBase |
+| catalog-messaging | BMQ, Kafka, RocketMQ |
+| catalog-compute | TCE, FaaS, Container, Katalyst |
+| catalog-storage | TOS, HDFS, ByteNAS |
+| catalog-networking | TLB, Neptune, AGW |
+| catalog-devops | Codebase, SCM, Bits, Meego, Overpass |
+| catalog-ai | Skills, MCP, Agent (1000+) |
+| catalog-search | ElasticSearch, ByteES, 检索 |
+| catalog-docs | Lark, Feishu, Wiki, 文档 |
