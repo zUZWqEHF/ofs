@@ -4,11 +4,21 @@
 
 ## 安装
 
+ofs 是纯 bash 脚本，Linux/macOS 通用（依赖: bash, curl, python3）。
+
 ```bash
 # 1. 把 CLI 放到 PATH (只需一次)
+# Linux
+sudo cp cli/ofs /usr/local/bin/ofs && sudo chmod +x /usr/local/bin/ofs
+
+# macOS (Homebrew 用户也可以放 ~/bin/)
 cp cli/ofs /usr/local/bin/ofs && chmod +x /usr/local/bin/ofs
 
-# 2. (可选) 配置 TOS 实现 Agent 间共享
+# 2. 初始化
+ofs init my-claude
+ofs register my-claude claude $(hostname) '["code","search"]'
+
+# 3. (可选) 配置 TOS 实现 Agent 间共享
 cat > ~/.ofs/tos.env << EOF
 TOS_ACCESS_KEY=your_key
 TOS_SECRET_KEY=your_secret

@@ -82,7 +82,7 @@ _ensure_agent() {
 }
 
 _ts() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
-_uuid() { cat /proc/sys/kernel/random/uuid 2>/dev/null || python3 -c "import uuid; print(uuid.uuid4())"; }
+_uuid() { cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen 2>/dev/null || python3 -c "import uuid; print(uuid.uuid4())"; }
 
 _ensure_tos() {
   [[ -n "$TOS_ACCESS_KEY" && -n "$TOS_BUCKET" ]] || {
