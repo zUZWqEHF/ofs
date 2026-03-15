@@ -151,6 +151,60 @@ ofs history <type> <id>       # 某对象的版本历史
 }
 \`\`\`
 
+## 搜索协议 — 如何在 OFS 中查找信息
+
+当被问到某个实体的信息时，**不要 grep 暴力搜索**。按以下顺序渐进式查找：
+
+\`\`\`
+Step 1: 精确读取
+  ofs read <agent> <type> <id>
+  → 拿到对象内容 + _refs 列表
+
+Step 2: 沿 _refs 图遍历
+  对象的 _refs 字段列出了所有关联实体，沿着它们读取即可展开上下文
+  → 不需要 grep，_refs 就是索引
+
+Step 3: 反向查找 (仅在 Step 2 不够时)
+  ls ~/.ofs/agents/<agent>/objects/links/ | grep <keyword>
+  → 查看 link 对象，找到"谁引用了我"
+
+Step 4: 降级到暴力搜 (最后手段)
+  ofs ls <agent> | grep <keyword>
+  → 全量列表 + 关键词匹配
+\`\`\`
+
+### _refs 是什么
+
+每个对象都可能有 `_refs` 字段，列出与它有关系的其他对象：
+\`\`\`json
+{
+  "dc_id": "DC-EAST",
+  "status": "active",
+  "_refs": [
+    "datacenter/DC-WEST",
+    "infra-component/comp-rds",
+    "sop/sop-failover-east",
+    "alert-summary/alerts-2026-03"
+  ]
+}
+\`\`\`
+
+读一个对象就知道下一步该读什么。**Link 就是索引，图遍历替代暴力搜索。**
+
+### 搜索示例
+
+\`\`\`bash
+# 被问 "DC-EAST 上跑了什么服务"
+ofs read wiki-crawler datacenter DC-EAST
+# → 看到 _refs 里有 infra-component/comp-rds, comp-redis, ...
+
+# 沿 _refs 展开
+ofs read wiki-crawler infra-component comp-rds
+# → 看到这个组件的详情 + 它的 _refs 指向更多 SOP/runbook
+
+# 不需要 grep 全库，2-3 步就拿到完整上下文
+\`\`\`
+
 ## 设计原则
 
 - **去中心化**: 没有中心 server，每个 agent 管自己的 `~/.ofs/agents/<id>/`
@@ -190,6 +244,7 @@ ofs read my-agent-id knowledge ofs-usage-patterns
 - **ofs-quickstart** — 安装步骤、项目结构、数据目录布局
 - **ofs-conventions** — 设计原则、CLI 命令速查
 - **ofs-usage-patterns** — 代码审查/调研/架构决策等场景的写入模板
+- **ofs-search-protocol** — 搜索协议：如何用 _refs 图遍历替代暴力搜索
 
 > 导入后这些就是你自己的 knowledge 对象，可以随时 `ofs write` 更新它们。
 

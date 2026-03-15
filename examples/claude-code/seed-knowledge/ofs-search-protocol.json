@@ -1,0 +1,32 @@
+{
+  "topic": "ofs-search-protocol",
+  "summary": "How to find information in OFS: follow _refs graph traversal instead of brute-force grep. Progressive disclosure in 4 steps.",
+  "protocol": [
+    {
+      "step": 1,
+      "name": "exact read",
+      "command": "ofs read <agent> <type> <id>",
+      "result": "object content + _refs list"
+    },
+    {
+      "step": 2,
+      "name": "follow _refs",
+      "description": "_refs field lists all related entities. Read them to expand context. No grep needed — _refs IS the index.",
+      "command": "ofs read <agent> <type-from-ref> <id-from-ref>"
+    },
+    {
+      "step": 3,
+      "name": "reverse lookup via links",
+      "description": "Only if step 2 is insufficient. Check link objects to find 'who references me'.",
+      "command": "ls ~/.ofs/agents/<agent>/objects/links/ | grep <keyword>"
+    },
+    {
+      "step": 4,
+      "name": "fallback grep",
+      "description": "Last resort. Full list + keyword match.",
+      "command": "ofs ls <agent> | grep <keyword>"
+    }
+  ],
+  "key_concept": "_refs is bidirectional. When A references B, B also has A in its _refs. Reading any node gives you its full neighborhood.",
+  "anti_pattern": "Do NOT grep/search all objects first. Always start with exact read + _refs traversal. Grep is O(N), graph walk is O(degree)."
+}
