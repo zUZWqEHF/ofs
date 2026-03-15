@@ -92,29 +92,29 @@ ofs pull other-agent      # 从 TOS 拉数据
 ofs push my-agent-id      # 推到 TOS
 \`\`\`
 
-## 搜索协议
+## 搜索协议 — 不要 grep，沿索引走
 
 \`\`\`
-Step 1: 分类入口 — 先查 catalog
-  ofs read authn-crawler runbook catalog-<category>
-  → 10 个分类: monitoring, database, messaging, compute, storage,
-    networking, devops, ai, search, docs
-  → 每个 catalog 列出该分类下所有 members
+Step 0: catalog 索引 (知道类目时)
+  ofs read <agent> runbook catalog-<类目>
+  → 类目: compute/ai/database/devops/docs/messaging/monitoring/networking/search/storage
+  → 返回 members 列表，直接精确读取
 
-Step 2: 精确读取
-  ofs read <agent> <type> <id>
-  → 拿到内容 + _refs
+Step 1: 精确读取 (知道 type+id 时)
+  ofs read <agent> <type> <id> → 拿到内容 + _refs
 
-Step 3: 沿 _refs 图遍历
-  → 对象的 _refs 列出关联实体，沿着读即可展开
-  → runbook._refs → service (文档→服务)
-  → service._refs → runbook (服务→文档)
+Step 2: 沿 _refs 图遍历 → 展开关联实体
 
-Step 4: 模糊搜索 (最后手段)
-  ofs ls <agent> | grep <keyword>
+Step 3: 反向查找 (仅 Step 2 不够时)
+  ls ~/.ofs/agents/<agent>/objects/links/ | grep <keyword>
+
+Step 4: ofs ls <agent> | grep <keyword> → 最后手段
 \`\`\`
 
-**不要 grep 暴力搜。catalog 是入口，_refs 是索引。**
+**原则: 每一步都应该告诉你下一步读什么，不需要猜。**
+- catalog → members → 精确读取
+- 精确读取 → _refs → 图遍历
+- grep 是 O(N)，索引是 O(1)，数据量大时差距致命
 ```
 
 ---
@@ -203,24 +203,9 @@ done
 
 | Agent | 数据 | 说明 |
 |-------|------|------|
-| authn-crawler | 1K+ skills/tools | ByteCloud Skills + MCP 索引 + 10 个分类 catalog |
+| authn-crawler | 1K+ skills/tools | ByteCloud Skills + MCP 索引 |
 | authn-test | 146K objects | 全平台技能 + 帮助文档 |
-| wiki-crawler | 475 objects | SRE 知识库 (SOP/预案/告警/datacenter) |
+| wiki-crawler | 475 objects | SRE 知识库 (SOP/预案/告警) |
 | sys-diagnosis | - | 告警诊断 agent |
 | sys-bot | - | 飞书问答 agent |
 | sys-inspection | 3 reports | CMDB 巡检 agent |
-
-### 分类 Catalog 索引
-
-| catalog | 内容 |
-|---------|------|
-| catalog-monitoring | Argos, Grafana, Metrics, Slardar, Oncall |
-| catalog-database | RDS, MySQL, Redis, Cache, ClickHouse, HBase |
-| catalog-messaging | BMQ, Kafka, RocketMQ |
-| catalog-compute | TCE, FaaS, Container, Katalyst |
-| catalog-storage | TOS, HDFS, ByteNAS |
-| catalog-networking | TLB, Neptune, AGW |
-| catalog-devops | Codebase, SCM, Bits, Meego, Overpass |
-| catalog-ai | Skills, MCP, Agent (1000+) |
-| catalog-search | ElasticSearch, ByteES, 检索 |
-| catalog-docs | Lark, Feishu, Wiki, 文档 |
