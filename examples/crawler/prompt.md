@@ -20,8 +20,8 @@ ofs register <your-agent-id> crawler $(hostname) '["crawl","extract","link"]'
 从数据源获取原始内容。支持多种来源：
 
 ```bash
-# API (带 SSO cookie)
-curl -s -b "bd_sso_3b6da9=$SSO_VAL" "https://api.example.com/list"
+# API (with auth)
+curl -s -H "Authorization: Bearer $TOKEN" "https://api.example.com/list"
 
 # Wiki/文档 API
 curl -s -H "Authorization: Bearer $TOKEN" "https://wiki.example.com/api/v2/pages/$PAGE_ID"
