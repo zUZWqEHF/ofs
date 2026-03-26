@@ -2,6 +2,60 @@
 
 去中心化 Agent 上下文系统。每个 Agent 拥有独立数据空间，通过 TOS 对象存储共享上下文。没有中心 Server。
 
+## CIS Agent Infrastructure
+
+OFS 是 CIS Agent 基础设施的 **上下文层** — 提供 Agent 间去中心化的知识共享与语义对齐。完整架构见 [cocoon-docs](https://code.byted.org/CIS/cocoon-docs)。
+
+```mermaid
+graph TB
+    subgraph App ["📦 应用层"]
+        Hub["SRE Agents Hub\nAgent 开发部署平台"]
+    end
+
+    subgraph Framework ["🧠 框架层"]
+        Cortex["Cortex\nChannel · Agent · Runtime\n消息路由 / AI 后端 / 技能编排"]
+    end
+
+    subgraph Context ["📁 上下文层"]
+        OFS["🎯 OFS\nOntology File System\n去中心化 Agent 上下文共享"]
+    end
+
+    subgraph Orchestration ["⚙️ 编排层"]
+        VK["vk-cocoon\nVirtual Kubelet\nPod → MicroVM"]
+        Webhook["cocoon-webhook\nAdmission Webhook\n有状态调度"]
+        Epoch["Epoch\nSnapshot Registry\n镜像分发"]
+    end
+
+    subgraph Sandbox ["🔒 Sandbox 层"]
+        Cocoon["Cocoon\nMicroVM Engine\nCloud Hypervisor"]
+    end
+
+    Hub --> Cortex
+    Cortex --> OFS
+    Cortex --> VK
+    Webhook -.-> VK
+    Epoch -.-> VK
+    VK --> Cocoon
+
+    style OFS fill:#fce4ec,stroke:#c62828,stroke-width:3px,color:#b71c1c
+    style Hub fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px
+    style Cortex fill:#e3f2fd,stroke:#1565c0,stroke-width:1px
+    style VK fill:#fff3e0,stroke:#e65100,stroke-width:1px
+    style Webhook fill:#fff3e0,stroke:#e65100,stroke-width:1px
+    style Epoch fill:#fff3e0,stroke:#e65100,stroke-width:1px
+    style Cocoon fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px
+```
+
+| 组件 | 层级 | 定位 | 仓库 |
+|------|------|------|------|
+| **Cocoon** | Sandbox 层 | MicroVM 引擎 — Cloud Hypervisor, OCI 镜像, COW, Snapshot | [projecteru2/cocoon](https://github.com/projecteru2/cocoon) |
+| **vk-cocoon** | 编排层 | K8s Virtual Kubelet — Pod → MicroVM 生命周期映射 | [CIS/vk-cocoon](https://code.byted.org/CIS/vk-cocoon) |
+| **cocoon-webhook** | 编排层 | Admission Webhook — 有状态 VM 调度与亲和 | [CIS/cocoon-webhook](https://code.byted.org/CIS/cocoon-webhook) |
+| **Epoch** | 编排层 | Snapshot Registry — 内容寻址存储, 跨节点分发 | [CIS/epoch](https://code.byted.org/CIS/epoch) |
+| **Cortex** | 框架层 | Agent 框架 — Channel/Agent/Runtime 三层解耦 | [CIS/cortex](https://code.byted.org/CIS/cortex) |
+| **OFS** | 上下文层 | Agent 上下文 — 去中心化 Ontology 文件系统 | [CIS/ofs](https://code.byted.org/CIS/ofs) |
+| **SRE Agents Hub** | 应用层 | Agent 开发部署平台 — 模板, 脚本, 密钥管理 | [CIS/sre_agents_hub](https://code.byted.org/CIS/sre_agents_hub) |
+
 ## 为什么需要 OFS
 
 当你有 3 个、30 个、甚至 10000 个 Agent 协作时，它们需要：
