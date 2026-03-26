@@ -9,25 +9,25 @@ OFS 是 CIS Agent 基础设施的 **上下文层** — 提供 Agent 间去中心
 ```mermaid
 graph TB
     subgraph App ["📦 应用层"]
-        Hub["SRE Agents Hub\nAgent 开发部署平台"]
+        Hub["SRE Agents Hub<br/>Agent 开发部署平台"]
     end
 
     subgraph Framework ["🧠 框架层"]
-        Cortex["Cortex\nChannel · Agent · Runtime\n消息路由 / AI 后端 / 技能编排"]
+        Cortex["Cortex<br/>Channel · Agent · Runtime<br/>消息路由 / AI 后端 / 技能编排"]
     end
 
     subgraph Context ["📁 上下文层"]
-        OFS["🎯 OFS\nOntology File System\n去中心化 Agent 上下文共享"]
+        OFS["🎯 OFS<br/>Ontology File System<br/>去中心化 Agent 上下文共享"]
     end
 
     subgraph Orchestration ["⚙️ 编排层"]
-        VK["vk-cocoon\nVirtual Kubelet\nPod → MicroVM"]
-        Webhook["cocoon-webhook\nAdmission Webhook\n有状态调度"]
-        Epoch["Epoch\nSnapshot Registry\n镜像分发"]
+        VK["vk-cocoon<br/>Virtual Kubelet<br/>Pod → MicroVM"]
+        Webhook["cocoon-webhook<br/>Admission Webhook<br/>有状态调度"]
+        Epoch["Epoch<br/>Snapshot Registry<br/>镜像分发"]
     end
 
     subgraph Sandbox ["🔒 Sandbox 层"]
-        Cocoon["Cocoon\nMicroVM Engine\nCloud Hypervisor"]
+        Cocoon["Cocoon<br/>MicroVM Engine<br/>Cloud Hypervisor"]
     end
 
     Hub --> Cortex
